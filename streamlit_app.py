@@ -17,15 +17,6 @@ def preprocess_data(df):
     df = df.drop(null.index, axis=1)
 
     # Convert 'Size' to numeric values
-    df['Size_inNums'] = df['Size'].str.split('[M,G,K,k]').str[0]
-    df['Size_inNums'] = df['Size_inNums'].astype(float)
-    df['Size_inNums'].fillna(df['Size_inNums'].mean(), inplace=True)
-
-    # Extract 'Size' unit and fill missing values
-    df['Size_inLetter'] = df['Size'].str.extract(r'([A-Za-z]+)')
-    df['Size_inLetter'].fillna(df['Size_inLetter'].mode()[0], inplace=True)
-
-    # Convert 'Size' with units to numeric values
     def convert_sizes(text):
         text = text.replace(",", "")  # Remove commas
         if text[-1] == "M":
@@ -38,8 +29,13 @@ def preprocess_data(df):
             return float(text[:-1]) * 1000
         elif text[-1] == "+":
             return 0.0
+        return np.nan  # Handle unexpected formats
 
-    df["Size"] = df["Size"].astype(str).apply(convert_sizes)
+    df['Size'] = df['Size'].astype(str).apply(convert_sizes)
+
+    # Extract 'Size' unit and fill missing values
+    df['Size_inNums'] = df['Size']
+    df['Size_inNums'].fillna(df['Size_inNums'].mean(), inplace=True)
 
     # Extract date components
     df['Updated_Month'] = df['Updated'].str.split(' ').str[0]
@@ -47,10 +43,9 @@ def preprocess_data(df):
     df['Updated_Day'] = df['Updated'].str.split(' ').str[1]
     df['Updated_Day'] = df['Updated_Day'].str.split(',').str[0]
 
-    df['Updated_Month'] = pd.to_datetime(df['Updated_Month'], format='%B', errors='coerce')
-    df['Updated_Month'] = df['Updated_Month'].dt.month
-    df['Updated_Year'] = df['Updated_Year'].astype(int)
-    df['Updated_Day'] = df['Updated_Day'].astype(int)
+    df['Updated_Month'] = pd.to_datetime(df['Updated_Month'], format='%B', errors='coerce').dt.month
+    df['Updated_Year'] = pd.to_numeric(df['Updated_Year'], errors='coerce')
+    df['Updated_Day'] = pd.to_numeric(df['Updated_Day'], errors='coerce')
 
     # Drop the original 'Updated' column
     df = df.drop(columns=['Updated'], axis=1)
@@ -103,63 +98,49 @@ def train_and_evaluate(df):
     X_test_scaled = scaler.transform(X_test)
 
     # Train and evaluate models
-    rf_model = RandomForestRegressor()
-    rf_model.fit(X_train_scaled, y_train)
-    y_pred_rf = rf_model.predict(X_test_scaled)
-
-    gbr_model = GradientBoostingRegressor(random_state=42)
-    gbr_model.fit(X_train_scaled, y_train)
-    y_pred_gbr = gbr_model.predict(X_test_scaled)
-
-    logistic_model = LogisticRegression(random_state=42, max_iter=1000)
-    logistic_model.fit(X_train_scaled, y_train)
-    y_pred_logistic = logistic_model.predict(X_test_scaled)
-
-    xgb_model = XGBRegressor(random_state=42)
-    xgb_model.fit(X_train_scaled, y_train)
-    y_pred_xgb = xgb_model.predict(X_test_scaled)
-
-    # Evaluation
-    results = {
-        'Random Forest R2': r2_score(y_test, y_pred_rf),
-        'Gradient Boosting R2': r2_score(y_test, y_pred_gbr),
-        'Logistic Regression Accuracy': accuracy_score(y_test, y_pred_logistic),
-        'Logistic Regression Confusion Matrix': confusion_matrix(y_test, y_pred_logistic),
-        'Logistic Regression Classification Report': classification_report(y_test, y_pred_logistic),
-        'XGBoost MAE': mean_absolute_error(y_test, y_pred_xgb),
-        'XGBoost MSE': mean_squared_error(y_test, y_pred_xgb),
-        'XGBoost R2': r2_score(y_test, y_pred_xgb)
+    models = {
+        'Random Forest': RandomForestRegressor(),
+        'Gradient Boosting': GradientBoostingRegressor(random_state=42),
+        'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000),
+        'XGBoost': XGBRegressor(random_state=42)
     }
+
+    results = {}
+    for name, model in models.items():
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
+
+        if name == 'Logistic Regression':
+            results[f'{name} Accuracy'] = accuracy_score(y_test, y_pred)
+            results[f'{name} Confusion Matrix'] = confusion_matrix(y_test, y_pred)
+            results[f'{name} Classification Report'] = classification_report(y_test, y_pred)
+        else:
+            results[f'{name} MAE'] = mean_absolute_error(y_test, y_pred)
+            results[f'{name} MSE'] = mean_squared_error(y_test, y_pred)
+            results[f'{name} R2'] = r2_score(y_test, y_pred)
 
     return results
 
 # Streamlit UI
 st.title("Data Processing and Model Evaluation")
 
-with st.expander('Data'):
-    st.write('**Raw data**')
-    df_url = 'https://raw.githubusercontent.com/Mohamed12Khaled/dp-ml/master/PlayStore_Apps.csv'
-    df = pd.read_csv(df_url)
-    st.write(df.head())
+st.write("**Raw data**")
+df = pd.read_csv('https://raw.githubusercontent.com/Mohamed12Khaled/dp-ml/master/PlayStore_Apps.csv')
+st.write(df.head())
 
-# Upload CSV file if needed
-uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.write("Original Data:")
-    st.dataframe(df.head())
-    
-    df_processed = preprocess_data(df)
-    
-    st.write("Processed Data:")
-    st.dataframe(df_processed.head())
-    
-    results = train_and_evaluate(df_processed)
-    
-    st.write("Model Evaluation Results:")
-    for key, value in results.items():
-        if isinstance(value, (np.ndarray, pd.DataFrame)):
-            st.write(f"{key}:")
-            st.dataframe(value)
-        else:
-            st.write(f"{key}: {value}")
+# Preprocess the data
+df_processed = preprocess_data(df)
+
+st.write("**Processed Data**")
+st.write(df_processed.head())
+
+# Train models and evaluate
+results = train_and_evaluate(df_processed)
+
+st.write("**Model Evaluation Results**")
+for key, value in results.items():
+    if isinstance(value, (np.ndarray, pd.DataFrame)):
+        st.write(f"{key}:")
+        st.dataframe(value)
+    else:
+        st.write(f"{key}: {value}")

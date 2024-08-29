@@ -24,3 +24,52 @@ with st.expander("Model"):
   null = null_vals[null_vals['Percent of Null Values'] > 25]
   print(len(null))
   df= df.drop(null.index, axis = 1)
+  df
+  null = null_vals[null_vals['Percent of Null Values'] > 25]
+print(len(null))
+df= df.drop(null.index, axis = 1)
+df['Size_inNums'] = df['Size'].str.split('[M,G,K,k]').str[0]
+df
+df['Size_inNums'] = df['Size_inNums'].astype(float)
+df.info()
+df['Size_inNums'].mean()
+df['Size_inNums'].fillna(df['Size_inNums'].mean(), inplace=True)
+df.info()
+df['Size_inLetter'] = df['Size'].str.extract(r'([A-Za-z]+)')
+df.head()
+df['Size_inLetter'].unique()
+df.info()
+df['Size_inLetter'].mode()[0]
+df['Size_inLetter'].fillna(df['Size_inLetter'].mode()[0], inplace=True)
+df.head()
+df.info()
+df['Updated_Month'] = df['Updated'].str.split(' ').str[0]
+df['Updated_Year'] = df['Updated'].str.split(',').str[1]
+df['Updated_Day'] = df['Updated'].str.split(' ').str[1]
+df['Updated_Day'] = df['Updated_Day'].str.split(',').str[0]
+def convert_sizes(text):
+    text = text.replace(",", "")  # Remove commas
+    if text[-1] == "M":
+        return float(text[:-1])    
+    elif text[-1] == "k":
+        return float(text[:-1]) / 1000
+    elif text[-1] == "K":
+        return float(text[:-1]) / 1000
+    elif text[-1] == "G":
+        return float(text[:-1]) * 1000
+    elif text[-1] == "+":
+        return 0.0
+    
+df["Size"] = df["Size"].astype(str).apply(convert_sizes)
+df["Size"]
+df
+df['Updated_Month']= pd.to_datetime( df['Updated_Month'], format='%B' ,errors='coerce')
+df.head()
+df['Updated_Month']=df['Updated_Month'].dt.month
+df.head()
+df['Updated_Year'] = df['Updated_Year'].astype(int)
+df['Updated_Day'] = df['Updated_Day'].astype(int)
+df.head()
+df = df.drop(columns=['Updated'], axis=1)
+df.head()
+df.info()

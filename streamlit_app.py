@@ -9,3 +9,10 @@ with st.expander("Data"):
   st.write("**Raw Data**")
   df = pd.read_csv("https://raw.githubusercontent.com/Mohamed12Khaled/dp-ml/master/PlayStore_Apps.csv")
   df
+  st.write('**X**')
+  X_raw = df.drop('Installs', axis=1)
+  X_raw
+
+  st.write('**y**')
+  y_raw = df.Installs
+  y_raw
